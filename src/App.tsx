@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect, useMemo, FormEvent } from 'react';
-import { Heart, Search, Plus, Utensils, Sparkles, Trash2, Pencil, X } from 'lucide-react';
+import { Heart, Search, Plus, Utensils, Sparkles, Trash2, Pencil, X, Wand2, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { initialFoodData, FoodItem } from './data/foodData';
 
@@ -12,6 +12,10 @@ export default function App() {
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [mood, setMood] = useState('');
   
+  // AI state
+  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
+
   // Add state
   const [newItemName, setNewItemName] = useState('');
   const [newItemTags, setNewItemTags] = useState('');
@@ -52,6 +56,31 @@ export default function App() {
       );
     });
   }, [foods, mood]);
+
+  const getAiSuggestion = async () => {
+    if (!mood.trim()) return;
+    setIsAiLoading(true);
+    setAiSuggestion('');
+    
+    try {
+      const response = await fetch('/api/ai/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mood, foods })
+      });
+      
+      const data = await response.json();
+      if (data.suggestion) {
+        setAiSuggestion(data.suggestion);
+      } else if (data.error) {
+        setAiSuggestion('Hic, có lỗi gì đó rồi em bé ơi. Thử lại sau nhé!');
+      }
+    } catch (error) {
+      setAiSuggestion('Hic, không kết nối được với trái tim AI rồi...');
+    } finally {
+      setIsAiLoading(false);
+    }
+  };
 
   const handleAddFood = (e: FormEvent) => {
     e.preventDefault();
@@ -96,7 +125,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen pb-20 px-4 md:px-8 max-w-4xl mx-auto">
+    <div className="min-h-screen pb-32 px-4 md:px-8 max-w-4xl mx-auto">
       {/* Header */}
       <header className="py-12 text-center">
         <motion.div
@@ -112,25 +141,50 @@ export default function App() {
       </header>
 
       {/* Mood Input Section */}
-      <section className="mb-12">
-        <div className="relative group">
-          <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
-            <Sparkles className="w-5 h-5 text-olive/50 group-focus-within:text-olive transition-colors" />
+      <section className="mb-8">
+        <div className="relative group flex gap-2">
+          <div className="relative flex-1">
+            <div className="absolute inset-y-0 left-4 flex items-center pointer-events-none">
+              <Sparkles className="w-5 h-5 text-olive/50 group-focus-within:text-olive transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Em bé đang cảm thấy thế nào? (vd: thèm cay, ăn no, đồ hàn...)"
+              className="w-full pl-12 pr-4 py-5 bg-white rounded-3xl shadow-sm border border-transparent focus:border-olive/30 focus:ring-4 focus:ring-olive/5 outline-none transition-all text-lg"
+              value={mood}
+              onChange={(e) => setMood(e.target.value)}
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Em bé đang cảm thấy thế nào? (vd: thèm cay, ăn no, đồ hàn...)"
-            className="w-full pl-12 pr-4 py-5 bg-white rounded-3xl shadow-sm border border-transparent focus:border-olive/30 focus:ring-4 focus:ring-olive/5 outline-none transition-all text-lg"
-            value={mood}
-            onChange={(e) => setMood(e.target.value)}
-          />
+          <button
+            onClick={getAiSuggestion}
+            disabled={isAiLoading || !mood.trim()}
+            className="px-6 bg-olive text-white rounded-3xl shadow-lg hover:bg-olive/90 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isAiLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Wand2 className="w-5 h-5" />}
+            <span className="hidden md:inline">Hỏi AI</span>
+          </button>
         </div>
-        {mood && (
-          <p className="mt-3 text-sm text-gray-500 text-center">
-            Đang tìm món cho tâm trạng: <span className="font-medium text-olive">"{mood}"</span>
-          </p>
-        )}
       </section>
+
+      {/* AI Suggestion Box */}
+      <AnimatePresence>
+        {aiSuggestion && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="mb-12 bg-white/80 backdrop-blur-md p-8 rounded-[40px] border border-olive/10 shadow-xl relative overflow-hidden"
+          >
+            <div className="absolute top-0 left-0 w-1 h-full bg-olive/30" />
+            <h3 className="serif text-xl text-olive mb-4 flex items-center gap-2">
+              <Heart className="w-4 h-4 fill-olive" /> Gợi ý từ anh Nhím iu:
+            </h3>
+            <div className="text-gray-700 leading-relaxed italic whitespace-pre-wrap">
+              {aiSuggestion}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Food List Section */}
       <section>
@@ -146,7 +200,6 @@ export default function App() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <AnimatePresence mode="popLayout">
             {filteredFoods.map((food, index) => {
-              // Find original index in foods array for editing/removing
               const originalIndex = foods.findIndex(f => f === food);
               
               return (

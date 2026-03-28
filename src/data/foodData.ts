@@ -22,4 +22,5 @@ export const initialFoodData: FoodItem[] = [
   { name: "Cơm gà", tags: ["đồ việt", "ăn no"] },
   { name: "Phở gà", tags: ["đồ nóng", "đồ việt", "ăn no", "kiêng bò", "ăn 1 bữa"] },
   { name: "Phở bò", tags: ["đồ nóng", "đồ việt", "ăn no", "ăn tối", "ăn sáng", "ăn 1 bữa"] },
+  { name: "Socola", tags: ["đến ngày", "ăn nhẹ", "ngọt"] },
 ];
