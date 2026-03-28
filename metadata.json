@@ -1,5 +1,5 @@
 {
   "name": "Sunny's Foodie Love",
-  "description": "Một ứng dụng nhỏ dành riêng cho Sunny iu để lựa chọn món ăn theo tâm trạng và cảm xúc.",
+  "description": "Một ứng dụng nhỏ dành riêng cho Sunny iu để lựa chọn món ăn theo tâm trạng và cảm xúc, được bảo mật bằng mật khẩu và các biện pháp an toàn API.",
   "requestFramePermissions": []
 }

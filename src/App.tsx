@@ -4,11 +4,16 @@
  */
 
 import { useState, useEffect, useMemo, FormEvent } from 'react';
-import { Heart, Search, Plus, Utensils, Sparkles, Trash2, Pencil, X, Wand2, Loader2 } from 'lucide-react';
+import { Heart, Search, Plus, Utensils, Sparkles, Trash2, Pencil, X, Wand2, Loader2, Lock, LogOut } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { initialFoodData, FoodItem } from './data/foodData';
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [password, setPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+
   const [foods, setFoods] = useState<FoodItem[]>([]);
   const [mood, setMood] = useState('');
   
@@ -26,22 +31,63 @@ export default function App() {
   const [editName, setEditName] = useState('');
   const [editTags, setEditTags] = useState('');
 
+  // Delete confirmation state
+  const [deletingIndex, setDeletingIndex] = useState<number | null>(null);
+
+  // Check auth status on load
+  useEffect(() => {
+    fetch('/api/auth/status')
+      .then(res => res.json())
+      .then(data => setIsAuthenticated(data.authenticated))
+      .catch(() => setIsAuthenticated(false));
+  }, []);
+
   // Load data from localStorage or initial data
   useEffect(() => {
-    const savedFoods = localStorage.getItem('sunny_foods');
-    if (savedFoods) {
-      setFoods(JSON.parse(savedFoods));
-    } else {
-      setFoods(initialFoodData);
+    if (isAuthenticated) {
+      const savedFoods = localStorage.getItem('sunny_foods');
+      if (savedFoods) {
+        setFoods(JSON.parse(savedFoods));
+      } else {
+        setFoods(initialFoodData);
+      }
     }
-  }, []);
+  }, [isAuthenticated]);
 
   // Save data to localStorage whenever it changes
   useEffect(() => {
-    if (foods.length > 0) {
+    if (foods.length > 0 && isAuthenticated) {
       localStorage.setItem('sunny_foods', JSON.stringify(foods));
     }
-  }, [foods]);
+  }, [foods, isAuthenticated]);
+
+  const handleLogin = async (e: FormEvent) => {
+    e.preventDefault();
+    setIsLoggingIn(true);
+    setLoginError('');
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+      const data = await response.json();
+      if (data.success) {
+        setIsAuthenticated(true);
+      } else {
+        setLoginError(data.error);
+      }
+    } catch (error) {
+      setLoginError('Hic, không kết nối được với server rồi...');
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await fetch('/api/auth/logout', { method: 'POST' });
+    setIsAuthenticated(false);
+  };
 
   const filteredFoods = useMemo(() => {
     if (!mood.trim()) return foods;
@@ -68,6 +114,11 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mood, foods })
       });
+      
+      if (response.status === 401) {
+        setIsAuthenticated(false);
+        return;
+      }
       
       const data = await response.json();
       if (data.suggestion) {
@@ -119,15 +170,68 @@ export default function App() {
   };
 
   const removeFood = (index: number) => {
-    if (window.confirm('Em bé có chắc muốn xóa món này không?')) {
-      setFoods(prev => prev.filter((_, i) => i !== index));
-    }
+    setFoods(prev => prev.filter((_, i) => i !== index));
+    setDeletingIndex(null);
   };
+
+  if (isAuthenticated === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-bg">
+        <Loader2 className="w-8 h-8 text-olive animate-spin" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-warm-bg px-4">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-white p-10 rounded-[48px] shadow-2xl max-w-md w-full text-center border border-olive/10"
+        >
+          <div className="w-20 h-20 bg-warm-bg rounded-full flex items-center justify-center mx-auto mb-6">
+            <Lock className="w-8 h-8 text-olive" />
+          </div>
+          <h1 className="serif text-3xl text-olive mb-2">Sunny iu ơi!</h1>
+          <p className="text-gray-500 mb-8 italic">Nhập mật khẩu bí mật để vào xem món ngon nhó</p>
+          
+          <form onSubmit={handleLogin} className="space-y-4">
+            <input
+              type="password"
+              placeholder="Mật khẩu của em bé..."
+              className="w-full px-6 py-4 bg-warm-bg rounded-2xl border-none focus:ring-2 focus:ring-olive/20 outline-none text-center text-lg"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoFocus
+            />
+            {loginError && (
+              <p className="text-red-400 text-sm italic">{loginError}</p>
+            )}
+            <button
+              type="submit"
+              disabled={isLoggingIn}
+              className="w-full py-4 bg-olive text-white font-medium rounded-2xl hover:bg-olive/90 transition-all shadow-lg shadow-olive/20 flex items-center justify-center gap-2"
+            >
+              {isLoggingIn ? <Loader2 className="w-5 h-5 animate-spin" /> : <Heart className="w-5 h-5 fill-white" />}
+              Vào với anh Nhím
+            </button>
+          </form>
+        </motion.div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pb-32 px-4 md:px-8 max-w-4xl mx-auto">
       {/* Header */}
-      <header className="py-12 text-center">
+      <header className="py-12 text-center relative">
+        <button 
+          onClick={handleLogout}
+          className="absolute top-4 right-0 p-3 text-gray-400 hover:text-olive transition-colors flex items-center gap-2 text-sm font-medium"
+        >
+          <LogOut className="w-4 h-4" /> Thoát
+        </button>
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -234,7 +338,7 @@ export default function App() {
                         <Pencil className="w-4 h-4" />
                       </button>
                       <button 
-                        onClick={() => removeFood(originalIndex)}
+                        onClick={() => setDeletingIndex(originalIndex)}
                         className="p-2 text-gray-300 hover:text-red-400 transition-all"
                         title="Xóa món"
                       >
@@ -308,6 +412,41 @@ export default function App() {
                   Lưu thay đổi
                 </button>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal */}
+      <AnimatePresence>
+        {deletingIndex !== null && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white w-full max-w-sm p-8 rounded-[40px] shadow-2xl text-center"
+            >
+              <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <Trash2 className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="serif text-2xl text-gray-800 mb-2">Xóa món này hả em?</h3>
+              <p className="text-gray-500 mb-8 italic">Em bé có chắc muốn xóa món "{foods[deletingIndex]?.name}" không nhó?</p>
+              
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setDeletingIndex(null)}
+                  className="flex-1 py-4 text-sm font-medium text-gray-500 hover:bg-gray-50 rounded-2xl transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={() => removeFood(deletingIndex)}
+                  className="flex-1 py-4 bg-red-400 text-white text-sm font-medium rounded-2xl hover:bg-red-500 transition-colors shadow-lg shadow-red-400/20"
+                >
+                  Xóa luôn
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

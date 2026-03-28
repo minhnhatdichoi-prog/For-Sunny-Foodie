@@ -2,17 +2,75 @@ import express from "express";
 import { createServer as createViteServer } from "vite";
 import path from "path";
 import dotenv from "dotenv";
+import cookieParser from "cookie-parser";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
 
 dotenv.config();
 
 async function startServer() {
   const app = express();
   const PORT = 3000;
+  const COOKIE_SECRET = process.env.COOKIE_SECRET || "sunny-love-secret-123";
+  const PASSWORD = process.env.SUNNY_PASSWORD || "sunnyiu";
+
+  // Security Headers
+  app.use(helmet({
+    contentSecurityPolicy: false, // Disable CSP for Vite dev server compatibility
+    crossOriginEmbedderPolicy: false,
+  }));
+
+  // Rate Limiting for Login
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10, // Limit each IP to 10 login requests per windowMs
+    message: { error: "Em bé thử lại sau 15 phút nhé, anh Nhím sợ bị hack quá nè!" },
+    standardHeaders: true,
+    legacyHeaders: false,
+  });
 
   app.use(express.json());
+  app.use(cookieParser(COOKIE_SECRET));
 
-  // API Route for AI Suggestions via OpenRouter
-  app.post("/api/ai/suggest", async (req, res) => {
+  // Auth Middleware
+  const authenticate = (req: any, res: any, next: any) => {
+    if (req.signedCookies.sunny_auth === "true") {
+      next();
+    } else {
+      res.status(401).json({ error: "Unauthorized" });
+    }
+  };
+
+  // Login Route
+  app.post("/api/auth/login", loginLimiter, (req, res) => {
+    const { password } = req.body;
+    if (password === PASSWORD) {
+      res.cookie("sunny_auth", "true", {
+        signed: true,
+        httpOnly: true,
+        secure: true,
+        sameSite: "none",
+        maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+      });
+      res.json({ success: true });
+    } else {
+      res.status(401).json({ error: "Sai mật khẩu rồi em bé ơi!" });
+    }
+  });
+
+  // Check Auth Status
+  app.get("/api/auth/status", (req, res) => {
+    res.json({ authenticated: req.signedCookies.sunny_auth === "true" });
+  });
+
+  // Logout Route
+  app.post("/api/auth/logout", (req, res) => {
+    res.clearCookie("sunny_auth");
+    res.json({ success: true });
+  });
+
+  // Protected AI Suggestion Route
+  app.post("/api/ai/suggest", authenticate, async (req, res) => {
     const { mood, foods } = req.body;
     const apiKey = process.env.OPENROUTER_API_KEY;
 
@@ -30,7 +88,7 @@ async function startServer() {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: "google/gemini-2.0-flash-001", // Using a fast model via OpenRouter
+          model: "google/gemini-2.0-flash-001",
           messages: [
             {
               role: "system",
