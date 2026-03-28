@@ -11,7 +11,6 @@ dotenv.config();
 async function startServer() {
   const app = express();
   const PORT = 3000;
-  const COOKIE_SECRET = process.env.COOKIE_SECRET || "sunny-love-secret-123";
   const PASSWORD = process.env.SUNNY_PASSWORD || "sunnyiu";
 
   // Security Headers
@@ -30,11 +29,11 @@ async function startServer() {
   });
 
   app.use(express.json());
-  app.use(cookieParser(COOKIE_SECRET));
+  app.use(cookieParser());
 
   // Auth Middleware
   const authenticate = (req: any, res: any, next: any) => {
-    if (req.signedCookies.sunny_auth === "true") {
+    if (req.cookies.sunny_auth === "true") {
       next();
     } else {
       res.status(401).json({ error: "Unauthorized" });
@@ -46,7 +45,6 @@ async function startServer() {
     const { password } = req.body;
     if (password === PASSWORD) {
       res.cookie("sunny_auth", "true", {
-        signed: true,
         httpOnly: true,
         secure: true,
         sameSite: "none",
@@ -60,7 +58,7 @@ async function startServer() {
 
   // Check Auth Status
   app.get("/api/auth/status", (req, res) => {
-    res.json({ authenticated: req.signedCookies.sunny_auth === "true" });
+    res.json({ authenticated: req.cookies.sunny_auth === "true" });
   });
 
   // Logout Route
